@@ -10,8 +10,9 @@ public class KitBotModel {
     
 	public KitBotModel() {
 		try {
-			serialPort = new SerialPort("COM4");
+			serialPort = new SerialPort("/dev/tty.usbmodemfa131");
             serialPort.openPort();
+            System.out.println("hello");
             serialPort.setParams(115200, 8, 1, 0);
         }
         catch (Exception ex){
