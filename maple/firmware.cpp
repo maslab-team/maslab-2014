@@ -2,17 +2,17 @@
 #include <wirish/wirish.h>
 
 /* features 
- [] serial comm
- [] dagu motor controller
- [] cytron motor controller
- [] encoders
-
- [] servo
- [] hc-sr04 sonic range finder
- [] analog read
- [] analog write
- [] digital read
- [] digital write
+ [ ] dagu motor controller
+ [x] cytron motor controller
+ [ ] encoder
+ [x] gyro
+ [ ] servo
+ [X] ultrasonic
+ [x] IR
+ [x] analog read
+ [X] analog write
+ [X] digital read
+ [X] digital write
  */
 
 #define LED_PIN BOARD_LED_PIN
@@ -22,6 +22,25 @@
 #define SET 'S'
 #define RESPONSE 'R'
 #define END ((char) 0xff)
+
+
+
+//===================================
+// MAPLE HARDWARE CLASSES
+//===================================
+
+HardwareSPI spi1(1);
+HardwareSPI spi2(2);
+
+
+//===================================
+// UTILITY FUNCTIONS
+//===================================
+
+uint8 serialRead() {
+    while (!SerialUSB.available());
+    return SerialUSB.read();
+}
 
 
 //===================================
@@ -66,7 +85,7 @@ public:
       free(devices);
     }
     
-    devicesArraySize = SerialUSB.read();
+    devicesArraySize = serialRead();
     devices = (Device**) malloc(sizeof(Device*) * devicesArraySize);
     count = 0;
 
@@ -87,12 +106,12 @@ public:
 
   void set() {
     while (true) {
-      uint8 deviceIndex = SerialUSB.read();
+      uint8 deviceIndex = serialRead();
       if (deviceIndex == END) {
         return;
       }
       if (deviceIndex >= count) {
-        while (SerialUSB.read() != END);
+        while (serialRead() != END);
         return;
       }
       devices[deviceIndex]->set();
@@ -114,39 +133,15 @@ public:
 //===================================
 
 #define ANALOG_INPUT_CODE 'A'
+#define PWM_OUTPUT_CODE 'P'
 #define DIGITAL_INPUT_CODE 'D'
 #define DIGITAL_OUTPUT_CODE 'd'
+
 #define CYTRON_CODE 'C'
-#define PWM_OUTPUT_CODE 'P'
+#define GYROSCOPE_CODE 'Y'
 #define ULTRASONIC_CODE 'U'
 
-class Cytron : public SettableDevice {
-private:    
-  uint8 dirPin;
-  uint8 pwmPin;
-public:
-  Cytron() {
-    dirPin = SerialUSB.read();
-    pwmPin = SerialUSB.read();
-    pinMode(dirPin, OUTPUT);
-    pinMode(pwmPin, PWM);
-    setSpeed(0);
-  }
 
-  void set() {
-    uint8 msb = SerialUSB.read();
-    uint8 lsb = SerialUSB.read();
-    uint16 speed = msb;
-    speed = (speed << 8) + lsb;
-    setSpeed(speed);
-  }
-
-  void setSpeed(uint16 speed) {
-    bool reverse = speed & 0x8000;
-    digitalWrite(dirPin, reverse);
-    analogWrite(pwmPin, reverse ? 2 * (speed ^ 0xFFFF) : 2 * speed);
-  }
-};
 
 class AnalogInput : public SampleableDevice {
 private:
@@ -154,8 +149,9 @@ private:
   uint16 val;
 public:
   AnalogInput() {
-    pin = SerialUSB.read();
+    pin = serialRead();
     pinMode(pin, INPUT_ANALOG);
+    val = 0;
   }
   void sample() {
     val = analogRead(pin);
@@ -171,20 +167,20 @@ public:
 class PwmOutput : public SettableDevice {
 private:
   uint8 pin;
-  uint16 val;
 public:
   PwmOutput() {
-    pin = SerialUSB.read();
+    pin = serialRead();
     pinMode(pin, PWM);
+    pwmWrite(pin, 0);
   }
   void set() {
-    uint8 msb = SerialUSB.read();
-    uint8 lsb = SerialUSB.read();
+    uint8 msb = serialRead();
+    uint8 lsb = serialRead();
     uint16 dutyCycle = msb;
     dutyCycle = (dutyCycle << 8) + lsb;
     pwmWrite(pin, dutyCycle);
   }
-}
+};
 
 class DigitalInput : public SampleableDevice {
 private:
@@ -192,8 +188,9 @@ private:
   bool val;
 public:
   DigitalInput() {
-    pin = SerialUSB.read();
+    pin = serialRead();
     pinMode(pin, INPUT);
+    val = false;
   }
   void sample() {
     val = digitalRead(pin);
@@ -201,22 +198,122 @@ public:
   void get() {
     SerialUSB.write(val);
   }
-}
+};
 
 class DigitalOutput : public SettableDevice {
 private:
   uint8 pin;
 public:
   DigitalOutput() {
-    pin = SerialUSB.read();
+    pin = serialRead();
     pinMode(pin, OUTPUT);
+    digitalWrite(pin, false);
   }
   void set() {
     // note that the uint8 is used here as a boolean
-    uint8 value = SerialUSB.read();
+    uint8 value = serialRead();
     digitalWrite(pin, value);
   }
-}
+};
+
+class Cytron : public SettableDevice {
+private:    
+  uint8 dirPin;
+  uint8 pwmPin;
+public:
+  Cytron() {
+    dirPin = serialRead();
+    pwmPin = serialRead();
+    pinMode(dirPin, OUTPUT);
+    pinMode(pwmPin, PWM);
+    setSpeed(0);
+  }
+
+  void set() {
+    uint8 msb = serialRead();
+    uint8 lsb = serialRead();
+    uint16 speed = msb;
+    speed = (speed << 8) + lsb;
+    setSpeed(speed);
+  }
+
+  void setSpeed(uint16 speed) {
+    bool reverse = speed & 0x8000;
+    digitalWrite(dirPin, reverse);
+    analogWrite(pwmPin, reverse ? 2 * (speed ^ 0xFFFF) : 2 * speed);
+  }
+};
+
+class Gyroscope : public SampleableDevice {
+private:
+  HardwareSPI* spi;
+  uint8 ssPin;
+  uint16 val;
+  uint8 readBuf[4];
+  uint8 writeBuf[4];
+  const static int delayTime = 1;
+
+public:
+  Gyroscope() {
+    uint8 spiPort = serialRead();
+    ssPin = serialRead();
+    
+    pinMode(ssPin, OUTPUT);
+    digitalWrite(ssPin, HIGH);
+    
+    if (spiPort == 1) {
+      spi = &spi1;
+    } else if (spiPort == 2) {
+      spi = &spi2;
+    } else {
+      return;
+    }
+    spi->begin(SPI_4_5MHZ, MSBFIRST, SPI_MODE_0);
+    
+    writeBuf[0] = 0x20;
+    writeBuf[1] = 0x00;
+    writeBuf[2] = 0x00;
+    writeBuf[3] = 0x00;
+    
+    val = 0;
+  }
+  
+  void sample() {
+    
+    digitalWrite(ssPin, LOW);
+    delay(delayTime);
+    
+    readBuf[0] = spi->transfer(writeBuf[0]);
+    delay(delayTime);
+    readBuf[1] = spi->transfer(writeBuf[1]);
+    delay(delayTime);
+    readBuf[2] = spi->transfer(writeBuf[2]);
+    delay(delayTime);
+    readBuf[3] = spi->transfer(writeBuf[3]);
+    delay(delayTime);
+    
+    digitalWrite(ssPin, HIGH);
+    
+    uint8 test = ((readBuf[0] & 0b00001100) == 0b00000100);
+    if (test) {
+      uint16 temp0 = (uint16) readBuf[0];
+      uint16 temp1 = (uint16) readBuf[1];
+      val = (readBuf[2] >> 2);
+      val += (temp1 << 6);
+      val += (temp0 << 14);  
+    } else {
+      // not sensor data; could be a R/W error message
+      val = 0x8000;
+    }
+  }
+  
+  void get() {
+    uint8 msb = val >> 8;
+    uint8 lsb = val;
+    SerialUSB.write(msb);
+    SerialUSB.write(lsb);
+  }
+};
 
 void ultrasonicISR(uint8 index);
 
@@ -231,13 +328,13 @@ void ultrasonicISR7() { ultrasonicISR(7); }
 
 typedef void (*UltrasonicISRPtr)();
 UltrasonicISRPtr ultrasonicISRList[8] = {&ultrasonicISR0,
-                                                &ultrasonicISR1,
-                                                &ultrasonicISR2,
-                                                &ultrasonicISR3,
-                                                &ultrasonicISR4,
-                                                &ultrasonicISR5,
-                                                &ultrasonicISR6,
-                                                &ultrasonicISR7};
+                                         &ultrasonicISR1,
+                                         &ultrasonicISR2,
+                                         &ultrasonicISR3,
+                                         &ultrasonicISR4,
+                                         &ultrasonicISR5,
+                                         &ultrasonicISR6,
+                                         &ultrasonicISR7};
                                                 
 class Ultrasonic;
 
@@ -245,8 +342,8 @@ Ultrasonic *ultrasonics[8];
 
 class Ultrasonic : public SampleableDevice {
 private:
-  uint8 echoPin;
   uint8 triggerPin;
+  uint8 echoPin;
 
   uint32 startTime;
   bool isEchoLow;
@@ -256,16 +353,19 @@ private:
 
 public:
   Ultrasonic() {
-    echoPin = SerialUSB.read();
-    delay(20);
-    triggerPin = SerialUSB.read();
-    delay(20);
+    triggerPin = serialRead();
+    echoPin = serialRead();
     
-    digitalWrite(triggerPin,LOW);
+    pinMode(triggerPin, OUTPUT);
+    pinMode(echoPin, INPUT);
+    
+    digitalWrite(triggerPin, LOW);
 
     ultrasonics[ultrasonicCount] = this;
+    attachInterrupt(echoPin, *(ultrasonicISRList[ultrasonicCount]), CHANGE);
     ultrasonicCount++;
-    //attachInterrupt(echoPin, ultrasonicISRList[ultrasonicCount], CHANGE);
+    
+    val = 0;
   }
 
   void localISR() {
@@ -330,7 +430,7 @@ void setup() {
 
 void loop() {
   //sample sensors and buffer
-  char header = SerialUSB.read();
+  char header = serialRead();
   switch (header) {
   case INIT:
     firmwareInit();
@@ -344,7 +444,7 @@ void loop() {
   case END:
     break;
   default:
-    while (SerialUSB.read() != END);
+    while (serialRead() != END);
     break;
   }
 }
@@ -356,13 +456,25 @@ void firmwareInit() {
 
   uint8 deviceCode;
   while (true) {
-    deviceCode = SerialUSB.read();
+    deviceCode = serialRead();
     switch (deviceCode) {
     case ANALOG_INPUT_CODE:
       deviceList.add(new AnalogInput());
       break;
+    case PWM_OUTPUT_CODE:
+      deviceList.add(new PwmOutput());
+      break;
+    case DIGITAL_INPUT_CODE:
+      deviceList.add(new DigitalInput());
+      break;
+    case DIGITAL_OUTPUT_CODE:
+      deviceList.add(new DigitalOutput());
+      break;
     case CYTRON_CODE:
       deviceList.add(new Cytron());
+      break;
+    case GYROSCOPE_CODE:
+      deviceList.add(new Gyroscope());
       break;
     case ULTRASONIC_CODE:
       deviceList.add(new Ultrasonic());
@@ -371,7 +483,7 @@ void firmwareInit() {
       initStatus = true;
       return;
     default:
-      while (SerialUSB.read() != END);
+      while (serialRead() != END);
       return;
     }
   }

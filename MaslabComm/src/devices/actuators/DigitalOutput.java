@@ -2,21 +2,24 @@ package devices.actuators;
 
 import devices.Actuator;
 
-public class DigitalOut extends Actuator {
+public class DigitalOutput extends Actuator {
 	private byte pin;
 	private byte value;
 	
-	public DigitalOut(int pin) {
+	/*
+	 * Takes one digital pin
+	 */
+	public DigitalOutput(int pin) {
 		this.pin = (byte) pin;
 	}
 
 	@Override
-	protected byte getDeviceCode() {
+	public byte getDeviceCode() {
 		return 'd';
 	}
 
 	@Override
-	protected byte[] getInitializationBytes() {
+	public byte[] getInitializationBytes() {
 		return new byte[] {pin};
 	}
 
