@@ -60,23 +60,31 @@ public class MapleIO {
 		});
 
 		// Auto-connect to port of given type "port"
-		int i = 0;
-		for (i = 0; i < 20; i++) {
-			try {
-				serialPort = new SerialPort(port + i);
-				serialPort.openPort();
-				serialPort.setParams(115200, 8, 1, 0);
-				break;
-			} catch (SerialPortException ex) {
-			}
-		}
-		if (i == 20) {
-			System.err.println("Failed to auto-connect to serial port of type \"" + port + "\"");
-			finalize();
-			System.exit(0);
-		}
+		try {
+			serialPort = new SerialPort(port);
+			serialPort.openPort();
+			serialPort.setParams(115200, 8, 1, 0);
+			System.out.println("Connected to serial port: " + port);
+		} catch (SerialPortException e) {
 
-		System.out.println("Connected to serial port: " + port + i);
+			int i = 0;
+			for (i = 0; i < 20; i++) {
+				try {
+					serialPort = new SerialPort(port + i);
+					serialPort.openPort();
+					serialPort.setParams(115200, 8, 1, 0);
+					break;
+				} catch (SerialPortException ex) {
+				}
+			}
+			if (i == 20) {
+				System.err.println("Failed to auto-connect to serial port of type \"" + port + "\"");
+				finalize();
+				System.exit(0);
+			}
+
+			System.out.println("Connected to serial port: " + port + i);
+		}
 	}
 
 	/*

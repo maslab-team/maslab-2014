@@ -17,6 +17,11 @@ public class MapleComm {
 		mapleIO = new MapleIO();
 		mapleIO.connect(portType);
 	}
+	
+	public MapleComm(String port) {
+		mapleIO = new MapleIO();
+		mapleIO.connect(port);
+	}
 
 	/*
 	 * Add a device to the device list.
