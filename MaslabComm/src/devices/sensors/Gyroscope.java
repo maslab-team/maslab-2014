@@ -7,10 +7,12 @@ import devices.Sensor;
 public class Gyroscope extends Sensor {
 	private static final double CONVERSION_FACTOR = (Math.PI / 180) / 80;
 	private static final int ERROR_CODE = -32767;
+	private long lastUpdateTime;
 	
 	byte spiPort;
 	byte ssPin;
 	double omega;
+	double theta;
 	
 	/*
 	 * The first argument is the index of an "SPI port". There are two on the Maple.
@@ -21,6 +23,8 @@ public class Gyroscope extends Sensor {
 	public Gyroscope(int spiPort, int ssPin) {
 		this.spiPort = (byte) spiPort;
 		this.ssPin = (byte) ssPin;
+		lastUpdateTime = System.nanoTime();
+		theta = 0;
 	}
 
 	@Override
@@ -35,11 +39,20 @@ public class Gyroscope extends Sensor {
 
 	@Override
 	public void consumeMessageFromMaple(ByteBuffer buff) {
+	    long currentTime = System.nanoTime();
 		byte msb = buff.get();
 		byte lsb = buff.get();
 		int new_omega = (msb * 256) + ((int) lsb & 0xff);
 		if (new_omega != ERROR_CODE) {
 			omega = new_omega * CONVERSION_FACTOR;
+			if(Math.abs(omega) > .01) {
+			    theta += omega*(currentTime - lastUpdateTime)/1000;
+			    theta = theta % 2*Math.PI;
+			    if(theta < 0) {
+			        theta += 2*Math.PI;
+			    }
+			    lastUpdateTime = currentTime;
+			}
 		}
 	}
 
@@ -51,6 +64,10 @@ public class Gyroscope extends Sensor {
 	// in radians per second
 	public double getOmega() {
 		return omega;
+	}
+	
+	public double getTheta() {
+	    return theta;
 	}
 	
 	public double getAngleChangeSinceLastUpdate() {
