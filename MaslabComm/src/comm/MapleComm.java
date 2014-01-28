@@ -48,10 +48,16 @@ public class MapleComm {
 			try {
 				data.write(device.getDeviceCode());
 				data.write(device.getInitializationBytes());
-			} catch (IOException e) { }
+			} catch (IOException e) {
+				System.err.println("Sending device and initialization codes failed: [" + e + "]");
+			}
 		}
 		mapleIO.setExpectedInboundMessageSize(consumeSize);
-
+		try {
+			Thread.sleep(2000);
+		}catch(InterruptedException e) {
+			
+		}
 		// Transmit the initialization message
 		mapleIO.sendInitMessage(data);
 	}
@@ -86,7 +92,8 @@ public class MapleComm {
 		mapleIO.sendSensorDataRequest();
 		try {
 			Thread.sleep(1);
-		} catch (InterruptedException e) { }
+		} catch (InterruptedException e) {	}
+		
 		ByteBuffer buff = ByteBuffer.wrap(mapleIO.getMostRecentMessage());
 		
 		// Give the byte buffer to each device and let it take what it needs

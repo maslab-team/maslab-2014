@@ -1,17 +1,21 @@
 package comm;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
 
 import jssc.SerialPort;
 import jssc.SerialPortException;
 
 public class MapleIO {
 	
+	private static final int SERIAL_BAUD_RATE = SerialPort.BAUDRATE_9600;
+	
 	public static final byte INIT_SIGNAL = (byte) 'I';
 	public static final byte SET_SIGNAL = (byte) 'S';
 	public static final byte GET_SIGNAL = (byte) 'G';
 	public static final byte RESPONSE_SIGNAL = (byte) 'R';
-	public static final byte END_SIGNAL = (byte) 0xff;
+	public static final byte END_SIGNAL = (byte) 'Z';// (byte) 0xff;
 	
 	public enum SerialPortType {
 		LINUX, SIMULATION, WINDOWS
@@ -19,7 +23,7 @@ public class MapleIO {
 	
 	private SerialPort serialPort;
 	private int expectedInboundMessageSize;
-	
+		
 	/*
 	 * Connects to your device based on the input mode proposed during object
 	 * construction.
@@ -63,7 +67,7 @@ public class MapleIO {
 		try {
 			serialPort = new SerialPort(port);
 			serialPort.openPort();
-			serialPort.setParams(115200, 8, 1, 0);
+			serialPort.setParams(SERIAL_BAUD_RATE, SerialPort.DATABITS_8, SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
 			System.out.println("Connected to serial port: " + port);
 		} catch (SerialPortException e) {
 
@@ -72,7 +76,7 @@ public class MapleIO {
 				try {
 					serialPort = new SerialPort(port + i);
 					serialPort.openPort();
-					serialPort.setParams(115200, 8, 1, 0);
+					serialPort.setParams(SERIAL_BAUD_RATE, SerialPort.DATABITS_8, SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
 					break;
 				} catch (SerialPortException ex) {
 				}
@@ -111,7 +115,7 @@ public class MapleIO {
 			// are made in immediate succession, so we pack the entire message
 			// into a single call.
 			byte[] packet = buildPacket(INIT_SIGNAL, message.toByteArray(), END_SIGNAL);
-			//System.out.println("INI: " + Arrays.toString(packet));
+			System.out.println("INI: " + Arrays.toString(packet));
 			serialPort.writeBytes(packet);
 		} catch (SerialPortException e) {
 			System.err.println("Init message failed to send. [" + e + "]");
@@ -142,16 +146,17 @@ public class MapleIO {
 	
 	public byte[] getMostRecentMessage() {
 		while (true) {
-			
-			byte[] data;
-			
+			byte[] data = null;
+
 			try {
 				byte firstByte = (byte) 0;
 				while (firstByte != RESPONSE_SIGNAL) {
 					firstByte = serialPort.readBytes(1)[0];
+					//System.out.println("Byte 0: " + ((char)firstByte));
 				}
 				data = serialPort.readBytes(expectedInboundMessageSize - 2);
 				byte lastByte = serialPort.readBytes(1)[0];
+				//System.out.println("Finished receiving message");
 				if (lastByte != END_SIGNAL) {
 					System.err.println("Received packet not terminated with END symbol");
 					System.exit(1);
