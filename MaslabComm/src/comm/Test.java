@@ -22,7 +22,7 @@ public class Test {
 		 * Create your Maple communication framework by specifying what kind of 
 		 * serial port you would like to try to autoconnect to.
 		 */
-		MapleComm comm = new MapleComm(MapleIO.SerialPortType.LINUX);
+		MapleComm comm = new MapleComm("/dev/tty.usbmodemfd121");
 
 		/*
 		 * Create an object for each device. The constructor arguments specify

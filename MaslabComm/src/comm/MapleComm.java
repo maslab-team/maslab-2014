@@ -39,7 +39,7 @@ public class MapleComm {
 			System.err.println("MapleComm initialization failed");
 			return;
 		}
-		
+				
 		// Construct the initialization message
 		ByteArrayOutputStream data = new ByteArrayOutputStream();
 		data.write((byte) deviceList.size());
@@ -53,11 +53,14 @@ public class MapleComm {
 			}
 		}
 		mapleIO.setExpectedInboundMessageSize(consumeSize);
+		
+		// Wait for ready signal
+		//mapleIO.waitForReadySignal();
 		try {
 			Thread.sleep(2000);
-		}catch(InterruptedException e) {
-			
 		}
+		catch (InterruptedException e) { System.err.println(e); }
+
 		// Transmit the initialization message
 		mapleIO.sendInitMessage(data);
 	}

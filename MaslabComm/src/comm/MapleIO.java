@@ -16,6 +16,7 @@ public class MapleIO {
 	public static final byte GET_SIGNAL = (byte) 'G';
 	public static final byte RESPONSE_SIGNAL = (byte) 'R';
 	public static final byte END_SIGNAL = (byte) 'Z';// (byte) 0xff;
+	public static final byte READY_SIGNAL = (byte) 'Q';
 	
 	public enum SerialPortType {
 		LINUX, SIMULATION, WINDOWS
@@ -144,6 +145,23 @@ public class MapleIO {
 		}
 	}
 	
+	public void waitForReadySignal() {
+		try {
+			byte firstByte = (byte) 0;
+			while (firstByte != READY_SIGNAL) {
+				System.out.println("WAITING");
+				firstByte = serialPort.readBytes(1)[0];
+				System.out.println(firstByte);
+				Thread.sleep(1000);
+				//System.out.println("Byte: " + ((char)firstByte));
+			}
+		} catch (SerialPortException e) {
+			System.err.println(e);
+		} catch (InterruptedException e) {
+			System.err.println(e);
+		}
+	}
+	
 	public byte[] getMostRecentMessage() {
 		while (true) {
 			byte[] data = null;
@@ -155,6 +173,7 @@ public class MapleIO {
 					//System.out.println("Byte 0: " + ((char)firstByte));
 				}
 				data = serialPort.readBytes(expectedInboundMessageSize - 2);
+				System.out.println("Received: " + Arrays.toString(data));
 				byte lastByte = serialPort.readBytes(1)[0];
 				//System.out.println("Finished receiving message");
 				if (lastByte != END_SIGNAL) {

@@ -29,11 +29,11 @@ public class Cytron extends Actuator {
 
 	@Override
 	public byte[] generateCommandToMaple() {
-		return new byte[] { (byte) ((speed >> 8) & 0xff),
+		return new byte[] { ((speed < 0) ? (byte)1 : (byte)0),
 				(byte) (speed & 0xff) };
 	}
 
 	public void setSpeed(double speed) {
-		this.speed = (int) (speed * 32767);
+		this.speed = (int) (speed * 256);
 	}
 }
